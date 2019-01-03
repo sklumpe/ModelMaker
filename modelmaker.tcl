@@ -5,6 +5,7 @@ package require cispeptide
 package require chirality
 package require mdff
 package require SSAnalysis
+package require HaddockInputGenerator
 
 package provide modelmaker 0.1
 
@@ -103,6 +104,8 @@ proc ::MODELMAKER::modelmaker_usage { } {
   puts "  get_empty_density     -- find the unassigned empty density around a structure" 
   puts "  model                 -- generate a homology model with MODELLER" 
   puts "  fragments             -- generate fragment files" 
+  puts "  docking               -- protein-protein docking using Haddock-EM"
+  puts "  multimodel_rmsd       -- RMSD state plot of multiple models"
   return
 
 }
@@ -149,6 +152,10 @@ proc ::MODELMAKER::modelmaker { args } {
     return [eval ::MODELMAKER::model $args]
   } elseif { $command == "fragments" } {
     return [eval ::MODELMAKER::fragments $args]
+  } elseif { $command == "docking" } {
+    return [eval ::MODELMAKER::docking $args]
+  } elseif { $command == "multimodel_rmsd" } {
+    return [eval ::MODELMAKER::multimodel_rmsd $args]
   } else {
     modelmaker_usage
     error "Unrecognized command."
@@ -2063,6 +2070,200 @@ proc ::MODELMAKER::fragments { args } {
     -in:file:vall ${rosettadbpath}/../../tools/fragment_tools/vall.apr24.2008.extended.gz \
     -out:file:frag_prefix $output_prefix \
     -overwrite >> fragments.log
+  
+
+}
+
+
+proc ::MODELMAKER::docking_usage { } {
+  puts "Usage: modelmaker docking -pdb1 <protein 1> -pdb2 <protein 2> -map <input EM map> -res <EM map resolution> ?options?"
+  puts "Options:"
+  puts "-active <Selection of known interacting residues> "
+  puts "-initdock <Initial docking (default=true)> "
+  puts "-np <Number of processors> "
+  
+}
+
+proc ::MODELMAKER::docking { args } {
+  variable haddockEXE
+  variable haddockPath
+  variable cnsPath
+  variable freeSasaEXE
+  
+  set nargs [llength [lindex $args 0]]
+  if {$nargs == 0} {
+    docking_usage
+    error ""
+  }
+  
+  foreach {name val} $args {
+    switch -- $name {
+      -pdb1 { set arg(pdb1) $val }
+      -pdb2 { set arg(pdb2) $val } 
+      -map { set arg(map) $val }
+      -res { set arg(res) $val }
+      -active { set arg(active) $val }
+      -initdock { set arg(initdock) $val }
+      -np { set arg(np) $val }
+
+      default { puts "Unknown argument $name"; return  }
+    }
+  }
+  
+  if { [info exists arg(pdb1)] } {
+    set pdb1 $arg(pdb1)
+  } else {
+    error "2 PDB Files required!"
+  }
+  if { [info exists arg(pdb2)] } {
+    set pdb2 $arg(pdb2)
+  } else {
+    error "2 PDB Files required!"
+  }
+  if { [info exists arg(map)] } {
+    set map $arg(map)
+  } else {
+    error "Electron density map required!"
+  }
+  if { [info exists arg(res)] } {
+    set res $arg(res)
+  } else {
+    error "Electron density map resolution required!"
+  }
+
+  if { [info exists arg(active)] } {
+    set active $arg(active)
+  } else {
+    set active "none"
+  }
+  puts $active
+  if { [info exists arg(initdock)] } {
+    set initdock $arg(initdock)
+  } else {
+    set initdock "on"
+  }
+
+  if { [info exists arg(np)] } {
+    set np $arg(np)
+  } else {
+    set np "1"
+  }
+  
+  haddock_em_docking $pdb1 $pdb2 $map $res $active $initdock $np
+  
+
+}
+
+proc ::MODELMAKER::multimodel_rmsd_usage { } {
+  puts "Usage: modelmaker multimodel_rmsd -pdblist <List> -alignsel <Selection of residues for alignment> ?options?"
+  puts "Options:"
+  puts "-colors <Selection of known interacting residues> in development"
+  puts "-rmsdsel    <Selection of residues for RMSD calculation> "  
+}
+
+proc ::MODELMAKER::multimodel_rmsd { args } {
+
+  
+  set nargs [llength [lindex $args 0]]
+  if {$nargs == 0} {
+    multimodel_rmsd_usage
+    error ""
+  }
+  
+  foreach {name val} $args {
+    switch -- $name {
+      -pdblist { set arg(pdblist) $val }
+      -alignsel { set arg(alignsel) $val }
+      -rmsdsel { set arg(rmsdsel) $val}
+
+      default { puts "Unknown argument $name"; return  }
+    }
+  }
+  
+  if { [info exists arg(pdblist)] } {
+    set pdblist $arg(pdblist)
+  } else {
+    error "PDB List required!"
+  }
+  if { [info exists arg(alignsel)] } {
+    set alignsel $arg(alignsel)
+  } else {
+    error "Alignment selection required!"
+  }
+if { [info exists arg(rmsdsel)] } {
+  set rmsdsel $arg(rmsdsel)
+  } else {
+    puts "No RMSD selection found. Using alignment selection for rmsd calculation"
+    set rmsdsel "none"
+  }
+#  puts $active
+#  if { [info exists arg(initdock)] } {
+#    set initdock $arg(initdock)
+#  } else {
+#    set initdock "on"
+#  }
+#
+#  if { [info exists arg(np)] } {
+#    set np $arg(np)
+#  } else {
+#    set np "1"
+#  }
+  
+  set result ""
+  foreach i $pdblist {
+    puts $i
+    set result [append result $i " "]
+  }
+  set list1 [split $pdblist { }]
+  set listlength [llength $list1]
+  set rmsd_matrix {
+    {}
+  }
+  for {set i 0} {$i < $listlength} {incr i} {
+	  for {set j 0} {$j < $listlength} {incr j} {
+		  set arr($i,$j) ""
+	  }
+  }
+  for {set i 0} {$i < [expr {$listlength +1}]} {incr i} {
+    for {set j [expr {$i+1}]} {$j < [expr {$listlength +1}]} {incr j} {
+      #puts "bla"
+      puts $i
+      puts $j
+      if {$j == $listlength} {
+        puts "DONE!"
+      } else {
+        mol new [lindex $list1 $i]
+        mol new [lindex $list1 $j]
+        set molnum [molinfo num]
+        #set sel1 [atomselect [expr {$molnum-2}] "segname B1 B2 B3 B4 B5 B6 B7"]
+        #set sel2 [atomselect [expr {$molnum-1}] "segname B1 B2 B3 B4 B5 B6 B7"]
+        #set all1 [atomselect [expr {$molnum-2}] "segname RN9 and name CA"]
+        #set all2 [atomselect [expr {$molnum-1}] "segname RN9 and name CA"]
+        set sel1 [atomselect [expr {$molnum-2}] $alignsel]
+        set sel2 [atomselect [expr {$molnum-1}] $alignsel]
+        if { [info exists arg(rmsdsel)] } {
+          set all1 [atomselect [expr {$molnum-2}] $rmsdsel]
+          set all2 [atomselect [expr {$molnum-1}] $rmsdsel]
+        } else {
+          set all1 [atomselect [expr {$molnum-2}] $alignsel]
+          set all2 [atomselect [expr {$molnum-1}] $alignsel]
+        }
+        #set all1 [atomselect [expr {$molnum-2}] "segname RN9 and name CA"]
+        #set all2 [atomselect [expr {$molnum-1}] "segname RN9 and name CA"]
+
+        set transformation_matrix [measure fit $sel1 $sel2]
+        $sel1 move $transformation_matrix
+        set value [measure rmsd $all1 $all2]
+        #lset $rmsd_matrix $i $j $value
+        set arr($i,$j) $value
+        #puts $arr(0,1)
+      }
+
+    }
+    }
+
+  #puts $result
+  exec python /Users/sven/MEGA/DEVELOPING/MODELMAKER/ModelMaker/multimodel_rmsd.py $result "colorlist" [array get arr]
   
 
 }

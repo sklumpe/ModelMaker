@@ -1,6 +1,7 @@
 package ifneeded modelmaker 0.1 "set env(RosettaVMDDIR) [list $dir]; [list source [file join $dir modelmaker.tcl]]"
 package ifneeded RosettaVMD 0.1 "set env(RosettaVMDDIR) [list $dir]; [list source [file join $dir rosetta_vmd.tcl]]"
 package ifneeded RosettaInputGenerator 0.1 [list source [file join $dir rosetta_input_generator.tcl]]
+package ifneeded HaddockInputGenerator 0.1 [list source [file join $dir haddock_input_generator.tcl]]
 package ifneeded MakePsf 0.1 [list source [file join $dir makepsf.tcl]]
 package ifneeded RosettaScoring 0.1 [list source [file join $dir rosetta_scoring_wrapper.tcl]]
 package ifneeded CCColor 0.1 [list source [file join $dir CCColor.tcl]]
