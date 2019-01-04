@@ -2078,9 +2078,11 @@ proc ::MODELMAKER::fragments { args } {
 proc ::MODELMAKER::docking_usage { } {
   puts "Usage: modelmaker docking -pdb1 <protein 1> -pdb2 <protein 2> -map <input EM map> -res <EM map resolution> ?options?"
   puts "Options:"
-  puts "-active <Selection of known interacting residues> "
+  puts "-active1 <Selection of known interacting residues for protein 1> "
+  puts "-active2 <Selection of known interacting residues for protein 2> "
   puts "-initdock <Initial docking (default=true)> "
   puts "-np <Number of processors> "
+  puts "-pdblist <PDB list for multiple pdb file docking>"
   
 }
 
@@ -2089,6 +2091,7 @@ proc ::MODELMAKER::docking { args } {
   variable haddockPath
   variable cnsPath
   variable freeSasaEXE
+  
   
   set nargs [llength [lindex $args 0]]
   if {$nargs == 0} {
@@ -2102,9 +2105,11 @@ proc ::MODELMAKER::docking { args } {
       -pdb2 { set arg(pdb2) $val } 
       -map { set arg(map) $val }
       -res { set arg(res) $val }
-      -active { set arg(active) $val }
+      -active1 { set arg(active1) $val }
+      -active2 { set arg(active2) $val }
       -initdock { set arg(initdock) $val }
       -np { set arg(np) $val }
+      -pdblist { set arg(pdblist) $val }
 
       default { puts "Unknown argument $name"; return  }
     }
@@ -2113,12 +2118,22 @@ proc ::MODELMAKER::docking { args } {
   if { [info exists arg(pdb1)] } {
     set pdb1 $arg(pdb1)
   } else {
-    error "2 PDB Files required!"
+    if { [info exists arg(pdblist)] } {
+      puts "PDB list given, ignoring -pdb1"
+      set pdb1 "NOT GIVEN"
+    } else {
+      error "2 PDB Files required!"
+    }
   }
   if { [info exists arg(pdb2)] } {
     set pdb2 $arg(pdb2)
   } else {
-    error "2 PDB Files required!"
+      if { [info exists arg(pdblist)] } {
+      puts "PDB list given, ignoring -pdb2"
+      set pdb2 "NOT GIVEN"
+    } else {
+      error "At least 2 PDB Files required!"
+    }
   }
   if { [info exists arg(map)] } {
     set map $arg(map)
@@ -2131,12 +2146,22 @@ proc ::MODELMAKER::docking { args } {
     error "Electron density map resolution required!"
   }
 
-  if { [info exists arg(active)] } {
-    set active $arg(active)
+  if { [info exists arg(active1)] } {
+    set active1 $arg(active1)
   } else {
-    set active "none"
+    set active1 "none"
+    puts "No active residues given for protein 1"
   }
-  puts $active
+  #puts $active1
+
+  if { [info exists arg(active2)] } {
+    set active2 $arg(active2)
+  } else {
+    set active2 "none"
+    puts "No active residues given for protein 2"
+  }
+  #puts $active1
+
   if { [info exists arg(initdock)] } {
     set initdock $arg(initdock)
   } else {
@@ -2148,8 +2173,14 @@ proc ::MODELMAKER::docking { args } {
   } else {
     set np "1"
   }
+
+  if { [info exists arg(pdblist)] } {
+    set pdblist $arg(pdblist)
+  } else {
+    set pdblist "none"
+  }
   
-  haddock_em_docking $pdb1 $pdb2 $map $res $active $initdock $np
+  haddock_em_docking $pdb1 $pdb2 $map $res $active1 $active2 $initdock $np $pdblist
   
 
 }
@@ -2263,7 +2294,7 @@ if { [info exists arg(rmsdsel)] } {
     }
 
   #puts $result
-  exec python /Users/sven/MEGA/DEVELOPING/MODELMAKER/ModelMaker/multimodel_rmsd.py $result "colorlist" [array get arr]
+  exec python $::env(RosettaVMDDIR)/multimodel_rmsd.py $result "colorlist" [array get arr]
   
 
 }
